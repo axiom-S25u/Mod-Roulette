@@ -30,11 +30,16 @@ static void bounceToMain(std::function<void()> fn) {
 }
 
 static std::string currentPlatformStr() {
-#ifdef GEODE_IS_WINDOWS
-    return "windows";
-#else
     return GEODE_PLATFORM_SHORT_IDENTIFIER;
-#endif
+}
+
+static std::string currentGDKey() {
+    auto plat = GEODE_PLATFORM_SHORT_IDENTIFIER;
+    if (geode::utils::string::contains(plat, "win")) return "win";
+    if (geode::utils::string::contains(plat, "mac")) return "mac";
+    if (geode::utils::string::contains(plat, "android")) return "android";
+    if (geode::utils::string::contains(plat, "ios")) return "ios";
+    return "win";
 }
 
 void rollCursedMod(
@@ -42,8 +47,21 @@ void rollCursedMod(
     std::function<void(std::string)> onFail
 ) {
     static std::mt19937 rng{std::random_device{}()};
-    std::uniform_int_distribution<int> pageDist(1, 10);
-    int page = pageDist(rng);
+    static std::vector<int> recentPages;
+
+    int page;
+    int attempts = 0;
+    do {
+        std::uniform_int_distribution<int> pageDist(1, 46);
+        page = pageDist(rng);
+        attempts++;
+        if (attempts > 200) break;
+    } while (std::find(recentPages.begin(), recentPages.end(), page) != recentPages.end());
+
+    recentPages.push_back(page);
+    if (recentPages.size() > 5) {
+        recentPages.erase(recentPages.begin());
+    }
 
     auto url = fmt::format(
         "https://api.geode-sdk.org/v1/mods?page={}&per_page=100&sort=downloads&platform={}",
@@ -97,6 +115,7 @@ void rollCursedMod(
             cm.downloads = (int)entry["download_count"].asInt().unwrapOr(0);
 
             bool platformOk = false;
+            bool gdVersionOk = false;
             auto myPlatform = currentPlatformStr();
             if (entry.contains("versions") && entry["versions"].isArray()
                 && entry["versions"].size() > 0) {
@@ -116,12 +135,28 @@ void rollCursedMod(
                 } else {
                     platformOk = true;
                 }
+
+                if (v.contains("gd")) {
+                    auto gd = v["gd"];
+                    auto gdKey = currentGDKey();
+                    if (gd.contains(gdKey) && gd[gdKey].isString()) {
+                        auto gdVer = gd[gdKey].asString().unwrapOr("");
+                        if (gdVer == "2.2081") {
+                            gdVersionOk = true;
+                        }
+                    } else {
+                        gdVersionOk = true;
+                    }
+                } else {
+                    gdVersionOk = true;
+                }
             } else {
                 cm.name = id;
                 cm.description = "no description";
                 cm.version = "v1.0.0";
             }
             if (!platformOk) continue;
+            if (!gdVersionOk) continue;
 
             if (entry.contains("developers") && entry["developers"].isArray()
                 && entry["developers"].size() > 0) {
@@ -137,7 +172,9 @@ void rollCursedMod(
         }
 
         if (pool.empty()) {
-            bounceToMain([onFail]() { onFail("no rollable mods. rng is rigged"); });
+            bounceToMain([onSuccess, onFail]() {
+                rollCursedMod(onSuccess, onFail);
+            });
             return;
         }
 
