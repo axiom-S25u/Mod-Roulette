@@ -36,8 +36,16 @@ void autoInstallCursedMod(
         return;
     }
 
+    std::string platform =
+#ifdef GEODE_IS_WINDOWS
+        "windows";
+#else
+        GEODE_PLATFORM_SHORT_IDENTIFIER;
+#endif
+
     auto url = fmt::format(
-        "https://api.geode-sdk.org/v1/mods/{}/versions/latest/download", id
+        "https://api.geode-sdk.org/v1/mods/{}/versions/latest/download?platform={}",
+        id, platform
     );
     auto target = dirs::getModsDir() / fmt::format("{}.geode", id);
 

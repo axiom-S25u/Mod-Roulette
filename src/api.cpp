@@ -3,21 +3,12 @@
 #include <Geode/utils/web.hpp>
 #include <Geode/loader/Mod.hpp>
 #include <Geode/loader/Loader.hpp>
+#include <Geode/utils/string.hpp>
 #include <matjson.hpp>
 #include <random>
 #include <thread>
-#include <algorithm>
 
 using namespace geode::prelude;
-
-static bool containsCaseInsensitive(std::string const& s, std::string const& substr) {
-    auto it = std::search(
-        s.begin(), s.end(),
-        substr.begin(), substr.end(),
-        [](char a, char b) { return std::tolower(a) == std::tolower(b); }
-    );
-    return it != s.end();
-}
 
 static bool isBlacklisted(std::string const& id, std::string const& name) { // would add more lwk
     static std::vector<std::string> banned = {
@@ -27,13 +18,23 @@ static bool isBlacklisted(std::string const& id, std::string const& name) { // w
         "prevter.imageplus"
     };
     for (auto& b : banned) if (b == id) return true;
-    if (containsCaseInsensitive(name, "API")) return true;
-    if (containsCaseInsensitive(id, "API")) return true;
+    auto lowerName = geode::utils::string::toLower(name);
+    auto lowerId = geode::utils::string::toLower(id);
+    if (geode::utils::string::contains(lowerName, "api")) return true;
+    if (geode::utils::string::contains(lowerId, "api")) return true;
     return false;
 }
 
 static void bounceToMain(std::function<void()> fn) {
     Loader::get()->queueInMainThread(std::move(fn));
+}
+
+static std::string currentPlatformStr() {
+#ifdef GEODE_IS_WINDOWS
+    return "windows";
+#else
+    return GEODE_PLATFORM_SHORT_IDENTIFIER;
+#endif
 }
 
 void rollCursedMod(
@@ -45,8 +46,8 @@ void rollCursedMod(
     int page = pageDist(rng);
 
     auto url = fmt::format(
-        "https://api.geode-sdk.org/v1/mods?page={}&per_page=100&sort=downloads",
-        page
+        "https://api.geode-sdk.org/v1/mods?page={}&per_page=100&sort=downloads&platform={}",
+        page, currentPlatformStr()
     );
 
     std::thread([url, onSuccess, onFail]() {
@@ -95,17 +96,32 @@ void rollCursedMod(
             cm.id = id;
             cm.downloads = (int)entry["download_count"].asInt().unwrapOr(0);
 
+            bool platformOk = false;
+            auto myPlatform = currentPlatformStr();
             if (entry.contains("versions") && entry["versions"].isArray()
                 && entry["versions"].size() > 0) {
                 auto const& v = entry["versions"][0];
                 cm.name = v["name"].asString().unwrapOr(id);
                 cm.description = v["description"].asString().unwrapOr("no description");
                 cm.version = v["version"].asString().unwrapOr("v1.0.0");
+
+                if (v.contains("platforms") && v["platforms"].isArray()) {
+                    for (size_t j = 0; j < v["platforms"].size(); ++j) {
+                        auto p = v["platforms"][j].asString().unwrapOr("");
+                        if (geode::utils::string::contains(myPlatform, p)) {
+                            platformOk = true;
+                            break;
+                        }
+                    }
+                } else {
+                    platformOk = true;
+                }
             } else {
                 cm.name = id;
                 cm.description = "no description";
                 cm.version = "v1.0.0";
             }
+            if (!platformOk) continue;
 
             if (entry.contains("developers") && entry["developers"].isArray()
                 && entry["developers"].size() > 0) {

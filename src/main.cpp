@@ -8,15 +8,12 @@ class $modify(ChaosMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) return false;
 
-        auto sprBg = CCSprite::createWithSpriteFrameName("GJ_likeBtn_001.png"); // id rather not use modlogo till dotdotdot makes me one
-        auto label = CCLabelBMFont::create("?", "bigFont.fnt");
-        label->setScale(0.5f);
-        label->setPosition(sprBg->getContentSize() / 2.f);
-        label->setColor({255, 100, 100});
-        sprBg->addChild(label);
+        auto logoPath = Mod::get()->getResourcesDir() / "logo.png";
+        auto logo = CCSprite::create(logoPath.string().c_str());
+        logo->setScale(2.5f);
 
         auto btn = CCMenuItemSpriteExtra::create(
-            sprBg, this, menu_selector(ChaosMenuLayer::onChaos)
+            logo, this, menu_selector(ChaosMenuLayer::onChaos)
         );
         btn->setID("chaos-roll"_spr);
 
