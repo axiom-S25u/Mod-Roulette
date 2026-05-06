@@ -4,6 +4,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/binding/FLAlertLayer.hpp>
 #include <Geode/binding/ButtonSprite.hpp>
+#include <Geode/utils/general.hpp>
 #include <Geode/ui/Notification.hpp>
 
 using namespace geode::prelude;
@@ -70,12 +71,27 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
 void ChaosPopup::onDownload(CCObject*) {
     this->onClose(nullptr);
     autoInstallCursedMod(m_mod.id, [](bool ok, std::string msg) {
-        auto notif = Notification::create(
-            fmt::format("{}: {}", ok ? "downloaded" : "failed", msg),
-            ok ? NotificationIcon::Success : NotificationIcon::Error,
-            3.f
+        if (!ok) {
+            auto notif = Notification::create(
+                fmt::format("failed: {}", msg),
+                NotificationIcon::Error,
+                3.f
+            );
+            notif->show();
+            return;
+        }
+
+        createQuickPopup(
+            "Mod Roulette",
+            "Mod downloaded! Restart now?",
+            "Restart?",
+            "nah id gamble",
+            [](auto, bool btn2) {
+                if (!btn2) {
+                    game::restart(true);
+                }
+            }
         );
-        notif->show();
     });
 }
 

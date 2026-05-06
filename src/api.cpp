@@ -34,12 +34,7 @@ static std::string currentPlatformStr() {
 }
 
 static std::string currentGDKey() {
-    auto plat = GEODE_PLATFORM_SHORT_IDENTIFIER;
-    if (geode::utils::string::contains(plat, "win")) return "win";
-    if (geode::utils::string::contains(plat, "mac")) return "mac";
-    if (geode::utils::string::contains(plat, "android")) return "android";
-    if (geode::utils::string::contains(plat, "ios")) return "ios";
-    return "win";
+    return GEODE_PLATFORM_SHORT_IDENTIFIER;
 }
 
 void rollCursedMod(
@@ -52,7 +47,7 @@ void rollCursedMod(
     int page;
     int attempts = 0;
     do {
-        std::uniform_int_distribution<int> pageDist(1, 46);
+        std::uniform_int_distribution<int> pageDist(1, 10);
         page = pageDist(rng);
         attempts++;
         if (attempts > 200) break;
@@ -70,7 +65,7 @@ void rollCursedMod(
 
     std::thread([url, onSuccess, onFail]() {
         web::WebRequest req;
-        req.userAgent("RandomModDownload/1.0 (Axiom)");
+        req.userAgent("ModRoulette/1.0.4 (Axiom)");
         req.timeout(std::chrono::seconds(15));
 
         auto res = req.getSync(url);
@@ -144,11 +139,7 @@ void rollCursedMod(
                         if (gdVer == "2.2081") {
                             gdVersionOk = true;
                         }
-                    } else {
-                        gdVersionOk = true;
                     }
-                } else {
-                    gdVersionOk = true;
                 }
             } else {
                 cm.name = id;
