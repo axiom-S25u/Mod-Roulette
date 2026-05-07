@@ -2,8 +2,16 @@
 
 #include <string>
 #include <functional>
+#include <vector>
+
+struct DepInfo {
+    std::string id;
+    std::string version;
+};
 
 bool isAlreadyInstalled(std::string const& id);
+
+std::vector<DepInfo> fetchDependencies(std::string const& id);
 
 void autoInstallCursedMod(
     std::string const& id,

@@ -34,7 +34,7 @@ static std::string currentPlatformStr() {
 }
 
 static std::string currentGDKey() {
-    return GEODE_PLATFORM_SHORT_IDENTIFIER;
+    return GEODE_PLATFORM_SHORT_IDENTIFIER_NOARCH;
 }
 
 void rollCursedMod(
@@ -65,7 +65,7 @@ void rollCursedMod(
 
     std::thread([url, onSuccess, onFail]() {
         web::WebRequest req;
-        req.userAgent("ModRoulette/1.0.4 (Axiom)");
+        req.userAgent("ModRoulette/1.0.5 (Axiom)");
         req.timeout(std::chrono::seconds(15));
 
         auto res = req.getSync(url);
@@ -134,10 +134,13 @@ void rollCursedMod(
                 if (v.contains("gd")) {
                     auto gd = v["gd"];
                     auto gdKey = currentGDKey();
-                    if (gd.contains(gdKey) && gd[gdKey].isString()) {
-                        auto gdVer = gd[gdKey].asString().unwrapOr("");
-                        if (gdVer == "2.2081") {
+                    for (auto const& [k, val] : gd) {
+                        if (!val.isString()) continue;
+                        if (k != gdKey && !geode::utils::string::startsWith(k, gdKey + "-") && !geode::utils::string::startsWith(k, gdKey)) continue;
+                        auto gdVer = val.asString().unwrapOr("");
+                        if (gdVer == "2.2081" || gdVer == "*") {
                             gdVersionOk = true;
+                            break;
                         }
                     }
                 }

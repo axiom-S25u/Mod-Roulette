@@ -6,6 +6,7 @@
 #include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/utils/general.hpp>
 #include <Geode/ui/Notification.hpp>
+#include <thread>
 
 using namespace geode::prelude;
 
@@ -64,6 +65,19 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
     );
     rerollBtn->setPositionX(65.f);
     menu->addChild(rerollBtn);
+
+    std::thread([this, winSize, cx]() {
+        auto deps = fetchDependencies(m_mod.id);
+        if (!deps.empty()) {
+            Loader::get()->queueInMainThread([this, winSize, cx]() {
+                auto depLbl = CCLabelBMFont::create("has a dep", "chatFont.fnt");
+                depLbl->setPosition({cx, winSize.height - 98.f});
+                depLbl->setScale(0.4f);
+                depLbl->setColor({150, 150, 150});
+                m_mainLayer->addChild(depLbl);
+            });
+        }
+    }).detach();
 
     return true;
 }
