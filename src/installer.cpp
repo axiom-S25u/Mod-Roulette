@@ -112,6 +112,49 @@ std::vector<DepInfo> fetchDependencies(std::string const& id) {
     return deps;
 }
 
+std::vector<std::string> fetchIncompatibilities(std::string const& id) {
+    std::vector<std::string> incomp;
+
+    auto url = fmt::format(
+        "https://api.geode-sdk.org/v1/mods/{}/versions/latest?platform={}",
+        id, platformStr()
+    );
+
+    web::WebRequest req;
+    req.userAgent("ModRoulette/1.0.6 (Axiom)");
+    req.timeout(std::chrono::seconds(15));
+
+    auto res = req.getSync(url);
+    if (!res.ok()) return incomp;
+    auto strRes = res.string();
+    if (strRes.isErr()) return incomp;
+    auto parsed = matjson::parse(strRes.unwrap());
+    if (parsed.isErr()) return incomp;
+    auto root = parsed.unwrap();
+    if (!root.contains("payload")) return incomp;
+    auto const& payload = root["payload"];
+    if (!payload.contains("incompatibilities") || !payload["incompatibilities"].isArray()) return incomp; // just 1 question ery, how the fuck did u think about this
+
+    auto const& incArr = payload["incompatibilities"];
+    for (size_t i = 0; i < incArr.size(); ++i) {
+        auto const& inc = incArr[i];
+        if (inc.isNull()) continue;
+        if (!inc.isObject()) continue;
+        if (!inc.contains("mod_id")) continue;
+        auto incId = inc["mod_id"].asString().unwrapOr("");
+        if (incId.empty()) continue;
+        incomp.push_back(incId);
+    }
+    return incomp;
+}
+
+bool disableMod(std::string const& id) {
+    auto mod = Loader::get()->getInstalledMod(id);
+    if (!mod) return false;
+    auto res = mod->disable();
+    return !res.isErr();
+}
+
 void autoInstallCursedMod(
     std::string const& id,
     std::function<void(bool, std::string)> onDone

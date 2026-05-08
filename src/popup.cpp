@@ -27,6 +27,7 @@ ChaosPopup* ChaosPopup::create(CursedMod mod) {
 
 bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
     m_mod = mod;
+    m_incompatibleMod = "";
     if (!Popup::init(w, h)) return false;
 
     this->setTitle("ROULETTE WINNER");
@@ -57,6 +58,7 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
         downloadSpr, this, menu_selector(ChaosPopup::onDownload)
     );
     downloadBtn->setPositionX(-65.f);
+    downloadBtn->setTag(1);
     menu->addChild(downloadBtn);
 
     auto rerollSpr = ButtonSprite::create("Reroll", "goldFont.fnt", "GJ_button_04.png", 0.7f);
@@ -66,7 +68,7 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
     rerollBtn->setPositionX(65.f);
     menu->addChild(rerollBtn);
 
-    std::thread([this, winSize, cx]() {
+    std::thread([this, winSize, cx, menu]() {
         auto deps = fetchDependencies(m_mod.id);
         if (!deps.empty()) {
             Loader::get()->queueInMainThread([this, winSize, cx]() {
@@ -75,6 +77,43 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
                 depLbl->setScale(0.4f);
                 depLbl->setColor({150, 150, 150});
                 m_mainLayer->addChild(depLbl);
+            });
+        }
+
+        auto incomp = fetchIncompatibilities(m_mod.id);
+        std::string foundIncomp = "";
+        for (auto& inc : incomp) {
+            if (isAlreadyInstalled(inc)) {
+                auto modObj = Loader::get()->getInstalledMod(inc);
+                if (modObj) {
+                    foundIncomp = modObj->getName();
+                    m_incompatibleMod = inc;
+                    break;
+                }
+            }
+        }
+
+        if (!foundIncomp.empty()) {
+            Loader::get()->queueInMainThread([this, menu, foundIncomp, winSize, cx]() {
+                auto downloadBtn = (CCMenuItemSpriteExtra*)menu->getChildByTag(1);
+                if (downloadBtn) {
+                    downloadBtn->removeFromParent();
+                }
+                auto disableSpr = ButtonSprite::create(
+                    fmt::format("disable {} and keep {}", clip(foundIncomp, 12), clip(m_mod.name, 12)).c_str(),
+                    "bigFont.fnt", "GJ_button_02.png", 0.55f
+                );
+                auto disableBtn = CCMenuItemSpriteExtra::create(
+                    disableSpr, this, menu_selector(ChaosPopup::onDisableAndKeep)
+                );
+                disableBtn->setPositionX(-65.f);
+                menu->addChild(disableBtn);
+
+                auto incompLbl = CCLabelBMFont::create("has an incompatibility", "chatFont.fnt");
+                incompLbl->setPosition({cx, winSize.height - 114.f});
+                incompLbl->setScale(0.4f);
+                incompLbl->setColor({200, 100, 100});
+                m_mainLayer->addChild(incompLbl);
             });
         }
     }).detach();
@@ -112,6 +151,44 @@ void ChaosPopup::onDownload(CCObject*) {
 void ChaosPopup::onReroll(CCObject*) {
     this->onClose(nullptr);
     showChaosRoll();
+}
+
+void ChaosPopup::onDisableAndKeep(CCObject*) {
+    this->onClose(nullptr);
+    if (!m_incompatibleMod.empty()) {
+        if (!disableMod(m_incompatibleMod)) {
+            auto notif = Notification::create(
+                fmt::format("failed to disable {}", m_incompatibleMod), // skill issue imo
+                NotificationIcon::Error,
+                3.f
+            );
+            notif->show();
+            return;
+        }
+    }
+    autoInstallCursedMod(m_mod.id, [](bool ok, std::string msg) {
+        if (!ok) {
+            auto notif = Notification::create(
+                fmt::format("failed: {}", msg),
+                NotificationIcon::Error,
+                3.f
+            );
+            notif->show();
+            return;
+        }
+
+        createQuickPopup(
+            "Mod Roulette",
+            "Mod downloaded! Restart now?",
+            "Restart?",
+            "nah id gamble",
+            [](auto, bool btn2) {
+                if (!btn2) {
+                    game::restart(true);
+                }
+            }
+        );
+    });
 }
 
 static bool startsWith(std::string const& s, std::string const& prefix) {
