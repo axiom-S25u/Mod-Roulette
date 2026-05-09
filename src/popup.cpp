@@ -49,8 +49,12 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
     devLbl->setScale(0.55f);
     m_mainLayer->addChild(devLbl);
 
+    this->setID("chaos-popup"_spr);
+    m_mainLayer->setID("chaos-main"_spr);
+
     auto menu = CCMenu::create();
     menu->setPosition({cx, 30.f});
+    menu->setID("chaos-menu"_spr);
     m_mainLayer->addChild(menu);
 
     auto downloadSpr = ButtonSprite::create("Download", "bigFont.fnt", "GJ_button_01.png", 0.7f);
@@ -58,7 +62,7 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
         downloadSpr, this, menu_selector(ChaosPopup::onDownload)
     );
     downloadBtn->setPositionX(-65.f);
-    downloadBtn->setTag(1);
+    downloadBtn->setID("chaos-download"_spr);
     menu->addChild(downloadBtn);
 
     auto rerollSpr = ButtonSprite::create("Reroll", "goldFont.fnt", "GJ_button_04.png", 0.7f);
@@ -68,43 +72,57 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
     rerollBtn->setPositionX(65.f);
     menu->addChild(rerollBtn);
 
-    std::thread([this, winSize, cx, menu]() {
-        auto deps = fetchDependencies(m_mod.id);
-        if (!deps.empty()) {
-            Loader::get()->queueInMainThread([this, winSize, cx]() {
-                auto depLbl = CCLabelBMFont::create("has a dep", "chatFont.fnt");
-                depLbl->setPosition({cx, winSize.height - 98.f});
-                depLbl->setScale(0.4f);
-                depLbl->setColor({150, 150, 150});
-                m_mainLayer->addChild(depLbl);
-            });
-        }
+    auto modId = m_mod.id;
+    auto modName = m_mod.name;
+    std::thread([modId, modName, winSize, cx]() {
+        auto deps = fetchDependencies(modId);
+        bool hasDeps = !deps.empty();
 
-        auto incomp = fetchIncompatibilities(m_mod.id);
-        std::string foundIncomp = "";
+        auto incomp = fetchIncompatibilities(modId);
+        std::string foundIncompId = "";
+        std::string foundIncompName = "";
         for (auto& inc : incomp) {
             if (isAlreadyInstalled(inc)) {
                 auto modObj = Loader::get()->getInstalledMod(inc);
                 if (modObj) {
-                    foundIncomp = modObj->getName();
-                    m_incompatibleMod = inc;
+                    foundIncompName = modObj->getName();
+                    foundIncompId = inc;
                     break;
                 }
             }
         }
 
-        if (!foundIncomp.empty()) {
-            Loader::get()->queueInMainThread([this, menu, foundIncomp, winSize, cx]() {
-                auto downloadBtn = (CCMenuItemSpriteExtra*)menu->getChildByTag(1);
+        Loader::get()->queueInMainThread([hasDeps, foundIncompId, foundIncompName, modName, winSize, cx]() {
+            auto scene = CCDirector::sharedDirector()->getRunningScene();
+            if (!scene) return;
+            auto popup = scene->querySelector("chaos-popup"_spr);
+            if (!popup) return; // popup got nuked, bail
+            auto chaosPopup = typeinfo_cast<ChaosPopup*>(popup);
+            if (!chaosPopup) return;
+            auto mainLayer = popup->querySelector("chaos-main"_spr);
+            if (!mainLayer) return;
+            auto menu = mainLayer->querySelector("chaos-menu"_spr);
+
+            if (hasDeps) {
+                auto depLbl = CCLabelBMFont::create("has a dep", "chatFont.fnt");
+                depLbl->setPosition({cx, winSize.height - 98.f});
+                depLbl->setScale(0.4f);
+                depLbl->setColor({150, 150, 150});
+                mainLayer->addChild(depLbl);
+            }
+
+            if (!foundIncompId.empty() && menu) {
+                chaosPopup->m_incompatibleMod = foundIncompId;
+                auto downloadBtn = menu->querySelector("chaos-download"_spr);
                 if (downloadBtn) {
                     downloadBtn->removeFromParent();
                 }
                 auto disableSpr = ButtonSprite::create(
-                    fmt::format("disable {} and keep {}", clip(foundIncomp, 12), clip(m_mod.name, 12)).c_str(),
+                    fmt::format("disable {} and keep {}", clip(foundIncompName, 12), clip(modName, 12)).c_str(),
                     "bigFont.fnt", "GJ_button_02.png", 0.55f
                 );
                 auto disableBtn = CCMenuItemSpriteExtra::create(
-                    disableSpr, this, menu_selector(ChaosPopup::onDisableAndKeep)
+                    disableSpr, chaosPopup, menu_selector(ChaosPopup::onDisableAndKeep)
                 );
                 disableBtn->setPositionX(-65.f);
                 menu->addChild(disableBtn);
@@ -113,9 +131,9 @@ bool ChaosPopup::initChaos(float w, float h, CursedMod mod) {
                 incompLbl->setPosition({cx, winSize.height - 114.f});
                 incompLbl->setScale(0.4f);
                 incompLbl->setColor({200, 100, 100});
-                m_mainLayer->addChild(incompLbl);
-            });
-        }
+                mainLayer->addChild(incompLbl);
+            }
+        });
     }).detach();
 
     return true;
