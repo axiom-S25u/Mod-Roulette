@@ -109,9 +109,7 @@ void rollCursedMod(
             cm.id = id;
             cm.downloads = (int)entry["download_count"].asInt().unwrapOr(0);
 
-            bool platformOk = false;
             bool gdVersionOk = false;
-            auto myPlatform = currentPlatformStr();
             if (entry.contains("versions") && entry["versions"].isArray()
                 && entry["versions"].size() > 0) {
                 auto const& v = entry["versions"][0];
@@ -119,24 +117,15 @@ void rollCursedMod(
                 cm.description = v["description"].asString().unwrapOr("no description");
                 cm.version = v["version"].asString().unwrapOr("v1.0.0");
 
-                if (v.contains("platforms") && v["platforms"].isArray()) {
-                    for (size_t j = 0; j < v["platforms"].size(); ++j) {
-                        auto p = v["platforms"][j].asString().unwrapOr("");
-                        if (geode::utils::string::contains(myPlatform, p)) {
-                            platformOk = true;
-                            break;
-                        }
-                    }
-                } else {
-                    platformOk = true;
-                }
-
-                if (v.contains("gd")) {
+                if (v.contains("gd") && v["gd"].isObject()) {
                     auto gd = v["gd"];
                     auto gdKey = currentGDKey();
                     for (auto const& [k, val] : gd) {
                         if (!val.isString()) continue;
-                        if (k != gdKey && !geode::utils::string::startsWith(k, gdKey + "-") && !geode::utils::string::startsWith(k, gdKey)) continue;
+                        bool matches = (k == gdKey)
+                            || geode::utils::string::startsWith(k, gdKey + "-")
+                            || (gdKey == "android" && (k == "android32" || k == "android64"));
+                        if (!matches) continue;
                         auto gdVer = val.asString().unwrapOr("");
                         if (gdVer == "2.2081" || gdVer == "*") {
                             gdVersionOk = true;
@@ -149,7 +138,6 @@ void rollCursedMod(
                 cm.description = "no description";
                 cm.version = "v1.0.0";
             }
-            if (!platformOk) continue;
             if (!gdVersionOk) continue;
 
             if (entry.contains("developers") && entry["developers"].isArray()
